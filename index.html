@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>What the Web Sees About You</title>
+  <style>
+    :root { --bg:#0b1220; --card:#121a2b; --text:#e6edf3; --muted:#9fb0c7; --accent:#4da3ff; }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;background:radial-gradient(1200px 600px at 70% -10%,#1a2a46 0%,transparent 60%),linear-gradient(160deg,#0b1220 0%,#0b1220 50%,#0a0f1a 100%);color:var(--text)}
+    .wrap{max-width:980px;margin:0 auto;padding:24px}
+    h1{font-size:28px;margin:8px 0 16px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+    .card h2{font-size:16px;margin:0 0 10px;color:var(--muted);font-weight:600;letter-spacing:.02em}
+    .big{font-size:32px;font-weight:700;color:var(--text);letter-spacing:.02em}
+    .row{display:flex;gap:12px;align-items:center;margin:6px 0}
+    .k{color:var(--muted);min-width:120px}
+    .v{font-weight:600}
+    .muted{color:var(--muted)}
+    .pill{display:inline-block;padding:4px 10px;border-radius:999px;background:rgba(77,163,255,.12);border:1px solid rgba(77,163,255,.35);color:#cfe5ff;font-weight:600}
+    footer{margin-top:24px;color:var(--muted);font-size:12px}
+    code{background:#0e1626;border:1px solid rgba(255,255,255,.07);padding:2px 6px;border-radius:6px}
+    a{color:#b9d7ff}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>What this page can see without permission</h1>
+
+    <div class="grid">
+      <section class="card" id="ipCard">
+        <h2>IP & Network</h2>
+        <div class="big" id="ip">Detecting…</div>
+        <div class="row"><div class="k">ISP</div><div class="v" id="isp">—</div></div>
+        <div class="row"><div class="k">ASN</div><div class="v" id="asn">—</div></div>
+        <div class="row"><div class="k">Proxy/VPN</div><div class="v" id="proxy">—</div></div>
+      </section>
+
+      <section class="card" id="locCard">
+        <h2>Approximate Location (from IP)</h2>
+        <div class="big" id="place">—</div>
+        <div class="row"><div class="k">Latitude / Longitude</div><div class="v" id="latlon">—</div></div>
+        <div class="row"><div class="k">Time zone</div><div class="v" id="tz">—</div></div>
+      </section>
+
+      <section class="card" id="wxCard">
+        <h2>Weather near you (IP-based)</h2>
+        <div class="big" id="wxNow">—</div>
+        <div class="row"><div class="k">Updated</div><div class="v" id="wxTime">—</div></div>
+        <div class="row"><div class="k">Conditions</div><div class="v" id="wxText">—</div></div>
+        <div class="row"><div class="k">Wind</div><div class="v" id="wind">—</div></div>
+        <div class="row"><div class="k">Next hours</div><div class="v" id="wxNext">—</div></div>
+      </section>
+
+      <section class="card" id="browserCard">
+        <h2>Browser Signals</h2>
+        <div class="row"><div class="k">User-Agent</div><div class="v" id="ua">—</div></div>
+        <div class="row"><div class="k">Language</div><div class="v" id="lang">—</div></div>
+        <div class="row"><div class="k">Screen</div><div class="v" id="screen">—</div></div>
+        <div class="row"><div class="k">Local time zone</div><div class="v" id="localtz">—</div></div>
+        <div class="row"><div class="k">Cookies enabled</div><div class="v" id="cookies">—</div></div>
+      </section>
+    </div>
+
+    <footer>
+      <p>Location is inferred from IP via <code>ipwho.is</code>. Weather is fetched from <code>open-meteo.com</code> using the inferred coordinates. No clicks or explicit permissions required. Precision is city/region level, not GPS.</p>
+    </footer>
+  </div>
+
+  <script>
+    // Utility: simple weather-code mapping for Open‑Meteo current_weather.weathercode
+    const WX = {
+      0:"Clear sky", 1:"Mainly clear", 2:"Partly cloudy", 3:"Overcast",
+      45:"Fog", 48:"Depositing rime fog",
+      51:"Light drizzle", 53:"Moderate drizzle", 55:"Dense drizzle",
+      56:"Light freezing drizzle", 57:"Dense freezing drizzle",
+      61:"Slight rain", 63:"Moderate rain", 65:"Heavy rain",
+      66:"Light freezing rain", 67:"Heavy freezing rain",
+      71:"Slight snow", 73:"Moderate snow", 75:"Heavy snow",
+      77:"Snow grains",
+      80:"Slight rain showers", 81:"Moderate rain showers", 82:"Violent rain showers",
+      85:"Slight snow showers", 86:"Heavy snow showers",
+      95:"Thunderstorm", 96:"Thunderstorm with slight hail", 99:"Thunderstorm with heavy hail"
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    // Fill browser signals immediately
+    (function browserSignals(){
+      $('ua').textContent = navigator.userAgent;
+      $('lang').textContent = navigator.language || (navigator.languages && navigator.languages[0]) || 'unknown';
+      $('screen').textContent = `${window.screen.width}×${window.screen.height} @ ${window.devicePixelRatio}x`;
+      try { $('localtz').textContent = Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown'; } catch { $('localtz').textContent = 'unknown'; }
+      $('cookies').textContent = navigator.cookieEnabled ? 'Yes' : 'No';
+    })();
+
+    async function withTimeout(promise, ms = 8000){
+      const to = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms));
+      return Promise.race([promise, to]);
+    }
+
+    async function getIPGeo(){
+      // ipwho.is returns rich JSON and supports CORS without an API key
+      const url = 'https://ipwho.is/';
+      const res = await withTimeout(fetch(url));
+      if(!res.ok) throw new Error('ipwho.is error');
+      const j = await res.json();
+      if(!j.success) throw new Error('Geo lookup failed');
+      return j;
+    }
+
+    function fmtPlace(g){
+      const parts = [g.city, g.region, g.country];
+      return parts.filter(Boolean).join(', ');
+    }
+
+    async function getWeather(lat, lon, tz){
+      const params = new URLSearchParams({
+        latitude: String(lat),
+        longitude: String(lon),
+        current_weather: 'true',
+        hourly: 'temperature_2m,precipitation,weathercode',
+        timezone: tz || 'auto'
+      });
+      const url = `https://api.open-meteo.com/v1/forecast?${params.toString()}`;
+      const res = await withTimeout(fetch(url));
+      if(!res.ok) throw new Error('weather error');
+      return res.json();
+    }
+
+    function nextHoursSummary(hourly){
+      if(!hourly || !hourly.time) return '—';
+      // Grab next 6 hours from now
+      const nowISO = new Date().toISOString();
+      const idx = hourly.time.findIndex(t => t >= nowISO);
+      const start = idx >= 0 ? idx : 0;
+      const end = Math.min(start + 6, hourly.time.length);
+      const temps = hourly.temperature_2m.slice(start, end);
+      const codes = hourly.weathercode.slice(start, end);
+      const precip = hourly.precipitation.slice(start, end);
+      const avgT = temps.length ? (temps.reduce((a,b)=>a+b,0)/temps.length).toFixed(1) : '—';
+      const anyP = precip.some(p => p > 0);
+      const desc = codes.length ? (WX[codes[0]] || '—') : '—';
+      return `${avgT}°C avg, ${anyP? 'precip possible' : 'dry likely'}, e.g. ${desc}`;
+    }
+
+    async function main(){
+      try {
+        const g = await getIPGeo();
+        $('ip').textContent = g.ip || 'unknown';
+        $('isp').textContent = (g.connection && g.connection.isp) || g.isp || 'unknown';
+        $('asn').textContent = (g.connection && g.connection.asn) ? `AS${g.connection.asn}` : 'unknown';
+        $('proxy').textContent = (g.security && (g.security.proxy || g.security.vpn)) ? 'Likely' : 'Not detected';
+
+        $('place').textContent = fmtPlace(g) || 'unknown';
+        $('latlon').textContent = (g.latitude!=null && g.longitude!=null) ? `${g.latitude.toFixed(3)}, ${g.longitude.toFixed(3)}` : 'unknown';
+        $('tz').textContent = (g.timezone && (g.timezone.id || g.timezone)) || 'unknown';
+
+        const lat = g.latitude, lon = g.longitude;
+        if (typeof lat === 'number' && typeof lon === 'number'){
+          const wx = await getWeather(lat, lon, (g.timezone && g.timezone.id) || undefined);
+          const cw = wx.current_weather;
+          if(cw){
+            const desc = WX[cw.weathercode] || 'Unknown';
+            $('wxNow').innerHTML = `${Math.round(cw.temperature)}°C <span class="pill">${desc}</span>`;
+            $('wxTime').textContent = cw.time || '—';
+            $('wxText').textContent = desc;
+            $('wind').textContent = `${Math.round(cw.windspeed)} km/h @ ${Math.round(cw.winddirection)}°`;
+          }
+          $('wxNext').textContent = nextHoursSummary(wx.hourly);
+        } else {
+          $('wxNow').textContent = 'No coordinates available';
+        }
+      } catch (err){
+        console.error(err);
+        $('ip').textContent = 'Lookup failed';
+        $('place').textContent = 'Lookup failed';
+        $('wxNow').textContent = 'Weather fetch failed';
+      }
+    }
+
+    main();
+  </script>
+</body>
+</html>
